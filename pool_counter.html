@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Licznik Basenów</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: #222;
+            color: #eee;
+            margin: 0;
+            height: 100vh;
+        }
+        #container {
+            position: relative;
+            width: 90vw;
+            max-width: 640px;
+            border: 2px solid #555;
+            border-radius: 10px;
+            overflow: hidden; /* <<< Dodane, żeby zaokrąglenia działały */
+        }
+        video, canvas {
+            display: block; /* <<< Ważne dla poprawnego ułożenia */
+            width: 100%;
+            height: auto;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        #licznik {
+            font-size: 15vw;
+            font-weight: bold;
+            color: #00ff7f;
+            margin: 20px 0;
+            text-shadow: 0 0 15px #00ff7f;
+        }
+        #startButton { /* <<< Przycisk do uruchomienia kamery */
+            font-size: 5vw;
+            padding: 15px 30px;
+            border-radius: 10px;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+    </style>
+    <!-- Import bibliotek MediaPipe -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <!-- Camera-utils to nie jest standardowa biblioteka, uprościmy kod -->
+</head>
+
+<body>
+    <h1>Licznik Basenów</h1>
+
+    <!-- <<< ZMIANA: Przycisk do aktywacji kamery -->
+    <button id="startButton">Startuj!</button>
+    
+    <div id="container" style="display: none;"> <!-- <<< Ukrywamy na początku -->
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="output_canvas"></canvas>
+    </div>
+    <div id="licznik">Baseny: 0</div>
+
+    <script type="module"> // <<< ZMIANA: type="module" dla lepszej obsługi
+        const videoElement = document.getElementById('webcam');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const licznikElement = document.getElementById('licznik');
+        const startButton = document.getElementById('startButton');
+        const container = document.getElementById('container');
+
+        let licznik = 1;
+        const cooldown = 6000; // 3 sekundy "nietykalności" po wykryciu
+        let czasOstatniegoZliczenia = 0;
+
+        function onResults(results) {
+            // Dopasuj rozmiar canvasa do wideo
+            canvasElement.width = videoElement.videoWidth;
+            canvasElement.height = videoElement.videoHeight;
+
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            // <<< ZMIANA: Rysujemy obraz z wideo na canvasie, żeby był widoczny
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            const teraz = Date.now();
+
+            if (results.detections.length > 0) {
+                // Twarz jest w kadrze
+                if (teraz - czasOstatniegoZliczenia > cooldown) {
+                    licznik += 2;
+                    licznikElement.textContent = `Baseny: ${licznik}`;
+                    czasOstatniegoZliczenia = teraz;
+                    
+                    document.body.style.backgroundColor = '#00ff7f';
+                    setTimeout(() => { document.body.style.backgroundColor = '#222'; }, 200);
+                }
+                
+                // Rysuj prostokąt wokół twarzy
+                // for (const detection of results.detections) {
+                //     drawDetection(canvasCtx, detection);
+                // }
+            }
+            canvasCtx.restore();
+        }
+
+        const faceDetection = new FaceDetection({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4/${file}`; // <<< Używamy konkretnej wersji
+        }});
+
+        faceDetection.setOptions({
+            model: 'short',
+            minDetectionConfidence: 0.6 // Trochę niższy próg, żeby łatwiej łapało
+        });
+        faceDetection.onResults(onResults);
+
+        // <<< GŁÓWNA ZMIANA: Funkcja uruchamiana po kliknięciu przycisku
+        async function startCamera() {
+            try {
+                // Prosimy o strumień z kamery
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'user' } // 'user' - przednia, 'environment' - tylna
+                });
+                videoElement.srcObject = stream;
+                
+                // Uruchamiamy przetwarzanie po pomyślnym połączeniu z kamerą
+                videoElement.onloadedmetadata = () => {
+                    container.style.display = 'block';
+                    startButton.style.display = 'none'; // Ukrywamy przycisk
+                    
+                    async function detectionLoop() {
+                        if (!videoElement.paused && !videoElement.ended) {
+                            await faceDetection.send({image: videoElement});
+                        }
+                        requestAnimationFrame(detectionLoop); // Zapętlamy
+                    }
+                    detectionLoop();
+                };
+
+            } catch (err) {
+                console.error("Błąd dostępu do kamery: ", err);
+                alert("Nie udało się uzyskać dostępu do kamery. Sprawdź uprawnienia w przeglądarce!");
+            }
+        }
+
+        startButton.addEventListener('click', startCamera);
+
+    </script>
+</body>
+</html>
