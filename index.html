@@ -78,8 +78,8 @@
         const startButton = document.getElementById('startButton');
         const container = document.getElementById('container');
 
-        let licznik = 1;
-        const cooldown = 6000; // 3 sekundy "nietykalności" po wykryciu
+        let licznik = -1;
+        const cooldown = 6000; // 6 sekund "nietykalności" po wykryciu
         let czasOstatniegoZliczenia = 0;
 
         function onResults(results) {
@@ -89,7 +89,7 @@
 
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-            // <<< ZMIANA: Rysujemy obraz z wideo na canvasie, żeby był widoczny
+            
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
             const teraz = Date.now();
@@ -119,11 +119,11 @@
 
         faceDetection.setOptions({
             model: 'short',
-            minDetectionConfidence: 0.6 // Trochę niższy próg, żeby łatwiej łapało
+            minDetectionConfidence: 0.65 // Trochę niższy próg, żeby łatwiej łapało
         });
         faceDetection.onResults(onResults);
 
-        // <<< GŁÓWNA ZMIANA: Funkcja uruchamiana po kliknięciu przycisku
+
         async function startCamera() {
             try {
                 // Prosimy o strumień z kamery
@@ -135,13 +135,13 @@
                 // Uruchamiamy przetwarzanie po pomyślnym połączeniu z kamerą
                 videoElement.onloadedmetadata = () => {
                     container.style.display = 'block';
-                    startButton.style.display = 'none'; // Ukrywamy przycisk
+                    startButton.style.display = 'none'; 
                     
                     async function detectionLoop() {
                         if (!videoElement.paused && !videoElement.ended) {
                             await faceDetection.send({image: videoElement});
                         }
-                        requestAnimationFrame(detectionLoop); // Zapętlamy
+                        requestAnimationFrame(detectionLoop); 
                     }
                     detectionLoop();
                 };
